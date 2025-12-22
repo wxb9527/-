@@ -1,0 +1,7 @@
+{
+  "name": "Copy of UniMind - 高校心理咨询系统",
+  "description": "一个为高校学生和咨询师设计的综合心理健康服务平台，支持情绪记录、预约咨询、在线沟通及危机应急处理。",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
