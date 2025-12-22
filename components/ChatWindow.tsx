@@ -2,10 +2,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Message } from '../types';
 import { getAIResponse } from '../services/geminiService';
+import { dataService } from '../services/dataService';
 
 interface ChatWindowProps {
   currentUser: User;
-  targetUser: User | { name: string, id: string, avatar: string }; // target can be a counselor, student, or 'AI'
+  targetUser: User | { name: string, id: string, avatar: string }; 
   isAI?: boolean;
   onClose: () => void;
 }
@@ -15,6 +16,34 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, targetUser, isAI, 
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const loadHistory = () => {
+    if (!isAI) {
+      const history = dataService.getMessages(currentUser.id, targetUser.id);
+      setMessages(history);
+    }
+  };
+
+  // 初始化加载
+  useEffect(() => {
+    loadHistory();
+  }, [currentUser.id, targetUser.id, isAI]);
+
+  // 监听同步消息（其他窗口或本窗口的消息保存）
+  useEffect(() => {
+    if (isAI) return;
+    const handleSync = () => {
+      loadHistory();
+    };
+    window.addEventListener('storage', handleSync);
+    // 同时开启一个小定时器作为保底同步（防止 storage 事件在某些边缘情况下不触发）
+    const interval = setInterval(loadHistory, 3000);
+    
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      clearInterval(interval);
+    };
+  }, [currentUser.id, targetUser.id, isAI]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -56,24 +85,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, targetUser, isAI, 
       setMessages(prev => [...prev, aiMsg]);
       setIsTyping(false);
     } else {
-      // Simulate real person response for demo
+      // 保存消息到 localStorage
+      dataService.saveMessage(userMsg);
+      
+      // 模拟一点点“正在输入”的反馈感
       setIsTyping(true);
-      setTimeout(() => {
-        const reply: Message = {
-          id: (Date.now() + 1).toString(),
-          senderId: targetUser.id,
-          receiverId: currentUser.id,
-          text: `你好，我是${targetUser.name}。我已经收到了你的消息。如果是紧急情况请拨打电话，否则我会在 24 小时内回复你。`,
-          timestamp: Date.now(),
-        };
-        setMessages(prev => [...prev, reply]);
-        setIsTyping(false);
-      }, 1500);
+      setTimeout(() => setIsTyping(false), 500);
     }
   };
 
   return (
-    <div className="fixed inset-0 sm:inset-auto sm:bottom-4 sm:right-4 sm:w-96 h-full sm:h-[600px] bg-white shadow-2xl rounded-t-2xl sm:rounded-2xl flex flex-col z-[100] animate-slide-up">
+    <div className="fixed inset-0 sm:inset-auto sm:bottom-4 sm:right-4 sm:w-96 h-full sm:h-[600px] bg-white shadow-2xl rounded-t-2xl sm:rounded-2xl flex flex-col z-[100] animate-slide-up border border-gray-100">
       {/* Header */}
       <div className="bg-indigo-600 p-4 flex items-center justify-between text-white rounded-t-2xl">
         <div className="flex items-center gap-3">
@@ -81,9 +103,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, targetUser, isAI, 
             <img src={targetUser.avatar} className="w-10 h-10 rounded-full border-2 border-white/20" alt="" />
             <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 border-2 border-indigo-600 rounded-full"></div>
           </div>
-          <div>
+          <div className="text-left">
             <h4 className="font-bold text-sm">{targetUser.name}</h4>
-            <p className="text-[10px] text-indigo-100">{isAI ? 'AI 心理助手' : '在线咨询师'}</p>
+            <p className="text-[10px] text-indigo-100">{isAI ? 'AI 心理助手' : '在线沟通中'}</p>
           </div>
         </div>
         <button onClick={onClose} className="p-1 hover:bg-white/10 rounded transition-colors">
@@ -101,8 +123,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, targetUser, isAI, 
             <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
               <i className="fas fa-comment-dots text-indigo-300 text-2xl"></i>
             </div>
-            <p className="text-sm text-gray-400">
-              {isAI ? '我是你的 AI 心理伙伴，可以跟我聊聊任何心事。' : `正在与 ${targetUser.name} 建立连接...`}
+            <p className="text-sm text-gray-400 px-6">
+              {isAI ? '我是你的 AI 心理伙伴，可以跟我聊聊任何心事。' : `这是您与 ${targetUser.name} 的对话起点。`}
             </p>
           </div>
         )}
@@ -111,7 +133,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ currentUser, targetUser, isAI, 
           const isMe = m.senderId === currentUser.id;
           return (
             <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+              <div className={`max-w-[80%] p-3 rounded-2xl text-sm text-left ${
                 isMe 
                 ? 'bg-indigo-600 text-white rounded-tr-none' 
                 : 'bg-white text-gray-800 shadow-sm border border-gray-100 rounded-tl-none'
