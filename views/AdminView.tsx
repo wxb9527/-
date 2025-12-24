@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, UserRole, HealthTag } from '../types';
 import { dataService } from '../services/dataService';
 
@@ -11,6 +11,7 @@ interface AdminViewProps {
 const AdminView: React.FC<AdminViewProps> = ({ user, onNotify }) => {
   const [activeTab, setActiveTab] = useState<UserRole>(UserRole.STUDENT);
   const [users, setUsers] = useState<User[]>([]);
+  const [allStudents, setAllStudents] = useState<User[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -27,7 +28,28 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNotify }) => {
 
   const refreshList = () => {
     setUsers(dataService.getUsersByRole(activeTab));
+    setAllStudents(dataService.getUsersByRole(UserRole.STUDENT));
   };
+
+  // 全校健康状态统计计算
+  const schoolStats = useMemo(() => {
+    const total = allStudents.length;
+    const unhealthy = allStudents.filter(s => s.healthTag === '不健康').length;
+    const subHealthy = allStudents.filter(s => s.healthTag === '亚健康').length;
+    const healthy = allStudents.filter(s => s.healthTag === '健康' || !s.healthTag).length;
+
+    const getPct = (count: number) => total === 0 ? 0 : Math.round((count / total) * 100);
+
+    return {
+      total,
+      healthy,
+      subHealthy,
+      unhealthy,
+      healthyPct: getPct(healthy),
+      subHealthyPct: getPct(subHealthy),
+      unhealthyPct: getPct(unhealthy)
+    };
+  }, [allStudents]);
 
   const getRoleText = () => {
     if (activeTab === UserRole.STUDENT) return '学生';
@@ -36,7 +58,6 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNotify }) => {
     return '';
   };
 
-  // 标准导入：兼容沙箱环境
   const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -83,14 +104,12 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNotify }) => {
     setShowPwd(false);
   };
 
-  // 核心：保存修改并下载文件（同步到本地 TXT 的标准方式）
   const handleSaveToLocalFile = () => {
     const content = dataService.exportData(activeTab);
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    // 提示用户覆盖原文件
     link.download = `${getRoleText()}名单_最新同步.txt`;
     link.click();
     URL.revokeObjectURL(url);
@@ -115,6 +134,77 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNotify }) => {
         className="hidden" 
       />
 
+      {/* 全校健康状态仪表盘 */}
+      <section className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-6 bg-indigo-600 rounded-full"></div>
+            <h3 className="text-lg font-bold text-gray-900">全校学生心理健康概览</h3>
+            <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full font-bold ml-2">样本总量: {schoolStats.total}人</span>
+          </div>
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">数据实时更新中</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* 健康卡片 */}
+          <div className="bg-green-50/50 border border-green-100 p-5 rounded-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform"><i className="fas fa-face-smile text-5xl text-green-600"></i></div>
+            <p className="text-[10px] font-bold text-green-600 uppercase mb-1">健康状态</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black text-gray-900">{schoolStats.healthy}</span>
+              <span className="text-sm font-bold text-gray-400">人</span>
+            </div>
+            <div className="mt-4">
+              <div className="flex justify-between text-[10px] font-bold mb-1">
+                <span className="text-gray-400">占比</span>
+                <span className="text-green-600">{schoolStats.healthyPct}%</span>
+              </div>
+              <div className="w-full bg-green-100 h-1.5 rounded-full overflow-hidden">
+                <div className="bg-green-500 h-full transition-all duration-1000" style={{ width: `${schoolStats.healthyPct}%` }}></div>
+              </div>
+            </div>
+          </div>
+
+          {/* 亚健康卡片 */}
+          <div className="bg-yellow-50/50 border border-yellow-100 p-5 rounded-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform"><i className="fas fa-face-meh text-5xl text-yellow-600"></i></div>
+            <p className="text-[10px] font-bold text-yellow-600 uppercase mb-1">亚健康状态</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black text-gray-900">{schoolStats.subHealthy}</span>
+              <span className="text-sm font-bold text-gray-400">人</span>
+            </div>
+            <div className="mt-4">
+              <div className="flex justify-between text-[10px] font-bold mb-1">
+                <span className="text-gray-400">占比</span>
+                <span className="text-yellow-600">{schoolStats.subHealthyPct}%</span>
+              </div>
+              <div className="w-full bg-yellow-100 h-1.5 rounded-full overflow-hidden">
+                <div className="bg-yellow-500 h-full transition-all duration-1000" style={{ width: `${schoolStats.subHealthyPct}%` }}></div>
+              </div>
+            </div>
+          </div>
+
+          {/* 不健康卡片 */}
+          <div className="bg-red-50/50 border border-red-100 p-5 rounded-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:scale-110 transition-transform"><i className="fas fa-face-frown text-5xl text-red-600"></i></div>
+            <p className="text-[10px] font-bold text-red-600 uppercase mb-1">不健康状态 (需干预)</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-black text-gray-900">{schoolStats.unhealthy}</span>
+              <span className="text-sm font-bold text-gray-400">人</span>
+            </div>
+            <div className="mt-4">
+              <div className="flex justify-between text-[10px] font-bold mb-1">
+                <span className="text-gray-400">占比</span>
+                <span className="text-red-600">{schoolStats.unhealthyPct}%</span>
+              </div>
+              <div className="w-full bg-red-100 h-1.5 rounded-full overflow-hidden">
+                <div className="bg-red-500 h-full transition-all duration-1000" style={{ width: `${schoolStats.unhealthyPct}%` }}></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner">
@@ -129,7 +219,6 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNotify }) => {
         </div>
         
         <div className="flex flex-wrap gap-3">
-          {/* 导入按钮 */}
           <button 
             onClick={() => fileInputRef.current?.click()} 
             className="flex items-center gap-2 px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-200 transition-all"
@@ -137,7 +226,6 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNotify }) => {
             <i className="fas fa-file-import"></i> 导入 TXT
           </button>
 
-          {/* 复制按钮 - 极速覆盖方案 */}
           <button 
             onClick={handleCopyToClipboard}
             className="flex items-center gap-2 px-5 py-2.5 bg-teal-50 text-teal-700 border border-teal-100 rounded-xl font-bold text-sm hover:bg-teal-100 transition-all"
@@ -145,7 +233,6 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNotify }) => {
             <i className="fas fa-copy"></i> 复制内容
           </button>
           
-          {/* 核心：保存并导出按钮 */}
           <button 
             onClick={handleSaveToLocalFile}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg ${hasChanges ? 'bg-orange-500 text-white hover:bg-orange-600 shadow-orange-100 animate-pulse' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100'}`}
@@ -159,7 +246,6 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNotify }) => {
         </div>
       </div>
 
-      {/* 选项卡 */}
       <div className="flex gap-2 bg-gray-200/50 p-1.5 rounded-2xl w-fit border border-gray-200">
         {[UserRole.STUDENT, UserRole.COUNSELOR, UserRole.ADVISOR].map(role => (
           <button 
@@ -172,7 +258,6 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNotify }) => {
         ))}
       </div>
 
-      {/* 数据表格 */}
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -220,7 +305,6 @@ const AdminView: React.FC<AdminViewProps> = ({ user, onNotify }) => {
         </div>
       </div>
 
-      {/* 编辑/新增 弹窗 */}
       {(editingUser || isAddingUser) && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[200]">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-slide-up">

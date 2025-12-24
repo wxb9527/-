@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Mood, Counselor, User, Appointment, HealthTag } from '../types';
 import { MOOD_CONFIG } from '../constants';
 import UserInfoModal from '../components/UserInfoModal';
@@ -51,13 +51,35 @@ const StudentView: React.FC<StudentViewProps> = ({
   const [viewingUser, setViewingUser] = useState<User | null>(null);
   const [showTest, setShowTest] = useState(false);
   const [showCounselorPicker, setShowCounselorPicker] = useState(false);
+  const [lastSync, setLastSync] = useState(Date.now());
   
   const [bookingStep, setBookingStep] = useState<{ counselor: Counselor, time?: string, location?: string } | null>(null);
   const [confirmCall, setConfirmCall] = useState<{ name: string, phone: string } | null>(null);
 
+  // 实时监听消息状态变动
+  useEffect(() => {
+    const handleSync = () => setLastSync(Date.now());
+    window.addEventListener('storage', handleSync);
+    const itv = setInterval(handleSync, 2000);
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      clearInterval(itv);
+    };
+  }, []);
+
   const assignedAdvisor = useMemo(() => {
     return advisors.find(a => a.college === user.college) || advisors[0];
   }, [advisors, user.college]);
+
+  // 判断是否有来自任何咨询师的未读消息
+  const hasCounselorUnread = useMemo(() => {
+    return counselors.some(c => dataService.hasUnreadMessages(user.id, c.id));
+  }, [counselors, user.id, lastSync]);
+
+  // 判断是否有来自辅导员的未读消息
+  const hasAdvisorUnread = useMemo(() => {
+    return assignedAdvisor ? dataService.hasUnreadMessages(user.id, assignedAdvisor.id) : false;
+  }, [assignedAdvisor, user.id, lastSync]);
 
   const isPhoneInvalid = !user.phone || user.phone.length !== 11;
 
@@ -70,6 +92,13 @@ const StudentView: React.FC<StudentViewProps> = ({
   const handleTestComplete = (tag: HealthTag) => {
     onUpdateHealthTag(tag);
     setShowTest(false);
+  };
+
+  const handleStartChat = (target: any) => {
+    if (target !== 'AI' && target.id) {
+      dataService.markMessagesAsRead(user.id, target.id);
+    }
+    onStartChat(target);
   };
 
   const getTagStyle = (tag?: HealthTag) => {
@@ -137,22 +166,40 @@ const StudentView: React.FC<StudentViewProps> = ({
       </section>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-indigo-600 p-6 rounded-2xl shadow-lg text-white">
+        <div className="bg-indigo-600 p-6 rounded-2xl shadow-lg text-white relative">
+          {hasCounselorUnread && (
+            <div className="absolute top-4 right-4 flex items-center gap-2">
+              <span className="flex h-3 w-3 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+              </span>
+              <span className="text-[10px] font-bold bg-red-500 px-1.5 py-0.5 rounded">新消息</span>
+            </div>
+          )}
           <div className="flex items-center gap-4 mb-4"><div className="p-3 bg-white/20 rounded-lg"><i className="fas fa-comments text-2xl"></i></div><h3 className="text-xl font-bold">在线倾诉</h3></div>
           <p className="text-indigo-100 text-sm mb-6">随时与 AI 助手或在线咨询师聊一聊，缓解压力。</p>
           <div className="flex gap-3">
-            <button onClick={() => onStartChat('AI')} className="flex-1 bg-white text-indigo-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-50">AI 助手</button>
-            <button onClick={() => setShowCounselorPicker(true)} className="flex-1 bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold border border-indigo-400">在线老师</button>
+            <button onClick={() => handleStartChat('AI')} className="flex-1 bg-white text-indigo-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-50">AI 助手</button>
+            <button onClick={() => setShowCounselorPicker(true)} className={`flex-1 px-4 py-2 rounded-lg text-sm font-bold border ${hasCounselorUnread ? 'bg-red-500 text-white border-red-400 animate-pulse' : 'bg-indigo-500 text-white border-indigo-400'}`}>在线老师</button>
           </div>
         </div>
 
-        <div className="bg-teal-600 p-6 rounded-2xl shadow-lg text-white">
+        <div className="bg-teal-600 p-6 rounded-2xl shadow-lg text-white relative">
+          {hasAdvisorUnread && (
+            <div className="absolute top-4 right-4 flex items-center gap-2">
+              <span className="flex h-3 w-3 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+              </span>
+              <span className="text-[10px] font-bold bg-red-500 px-1.5 py-0.5 rounded">待查看</span>
+            </div>
+          )}
           <div className="flex items-center gap-4 mb-4"><div className="p-3 bg-white/20 rounded-lg"><i className="fas fa-user-tie text-2xl"></i></div><h3 className="text-xl font-bold">辅导员联系</h3></div>
           <p className="text-teal-100 text-sm mb-6">生活事务或紧急情况，可直接联系辅导员。</p>
           <div className="flex gap-3">
             {assignedAdvisor && (
               <>
-                <button onClick={() => onStartChat(assignedAdvisor)} className="flex-1 bg-white text-teal-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-teal-50">留言</button>
+                <button onClick={() => handleStartChat(assignedAdvisor)} className={`flex-1 px-4 py-2 rounded-lg text-sm font-bold transition-all ${hasAdvisorUnread ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-teal-600 hover:bg-teal-50'}`}>留言</button>
                 <button onClick={() => setConfirmCall({ name: assignedAdvisor.name, phone: assignedAdvisor.phone! })} className="flex-1 bg-teal-500 text-white px-4 py-2 rounded-lg text-sm font-bold border border-teal-400">通话</button>
               </>
             )}
@@ -320,25 +367,31 @@ const StudentView: React.FC<StudentViewProps> = ({
              </div>
              <p className="text-sm text-gray-500 mb-6 text-left">请从以下在线咨询师中选择一位开启实时对话：</p>
              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                {counselors.map(c => (
-                  <button 
-                    key={c.id} 
-                    onClick={() => { onStartChat(c); setShowCounselorPicker(false); }}
-                    className="w-full flex items-center gap-4 p-4 rounded-2xl border border-gray-100 bg-gray-50/50 hover:bg-indigo-50 hover:border-indigo-200 transition-all text-left group"
-                  >
-                    <img src={c.avatar} className="w-14 h-14 rounded-full border-2 border-white shadow-sm" alt="" />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-gray-900">{c.name}</span>
-                        <span className={`text-[10px] font-bold px-1.5 rounded-full ${c.gender === '女' ? 'bg-pink-100 text-pink-600' : 'bg-blue-100 text-blue-600'}`}>{c.gender}</span>
+                {counselors.map(c => {
+                  const unread = dataService.hasUnreadMessages(user.id, c.id);
+                  return (
+                    <button 
+                      key={c.id} 
+                      onClick={() => { handleStartChat(c); setShowCounselorPicker(false); }}
+                      className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all text-left group ${unread ? 'bg-indigo-50 border-indigo-200 ring-2 ring-indigo-100' : 'bg-gray-50/50 border-gray-100 hover:bg-indigo-50 hover:border-indigo-200'}`}
+                    >
+                      <div className="relative">
+                        <img src={c.avatar} className="w-14 h-14 rounded-full border-2 border-white shadow-sm" alt="" />
+                        {unread && <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-bounce"></div>}
                       </div>
-                      <p className="text-xs text-indigo-600 mt-1">{(c as any).specialization || '资深心理咨询专家'}</p>
-                    </div>
-                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-indigo-600 shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                      <i className="fas fa-chevron-right text-xs"></i>
-                    </div>
-                  </button>
-                ))}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-gray-900">{c.name}</span>
+                          <span className={`text-[10px] font-bold px-1.5 rounded-full ${c.gender === '女' ? 'bg-pink-100 text-pink-600' : 'bg-blue-100 text-blue-600'}`}>{c.gender}</span>
+                        </div>
+                        <p className="text-xs text-indigo-600 mt-1">{(c as any).specialization || '资深心理咨询专家'}</p>
+                      </div>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${unread ? 'bg-red-500 text-white shadow-lg' : 'bg-white text-indigo-600 border border-gray-100 shadow-sm group-hover:bg-indigo-600 group-hover:text-white'}`}>
+                        <i className={`fas ${unread ? 'fa-bell' : 'fa-chevron-right'} text-xs`}></i>
+                      </div>
+                    </button>
+                  );
+                })}
              </div>
           </div>
         </div>

@@ -1,10 +1,12 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Fix: Initializing GoogleGenAI with the mandatory apiKey object from process.env.API_KEY directly.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getAIResponse = async (userMessage: string, history: { role: string, parts: { text: string }[] }[]) => {
   try {
+    // Fix: Using ai.models.generateContent directly without redundant model variable definition.
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: [
@@ -20,6 +22,7 @@ export const getAIResponse = async (userMessage: string, history: { role: string
       },
     });
 
+    // Fix: Extracted text from response.text property (not a method).
     return response.text || "对不起，我现在无法回应，请尝试联系我们的在线老师。";
   } catch (error) {
     console.error("Gemini API Error:", error);

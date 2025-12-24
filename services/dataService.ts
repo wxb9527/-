@@ -24,8 +24,13 @@ A002,赵辅导,admin,艺术学院,13533334444,女
 const DB_KEY = 'unimind_mock_db';
 const CHAT_KEY = 'unimind_chat_history';
 const APP_KEY = 'unimind_appointments';
+const READ_MARK_KEY = 'unimind_read_markers';
 
 export const dataService = {
+  _notifySync() {
+    window.dispatchEvent(new Event('storage'));
+  },
+
   parseTxtToStudents(txt: string): User[] {
     return txt.split('\n').filter(l => l.trim()).map(line => {
       const parts = line.split(/[,\s\t]+/).map(s => s.trim());
@@ -88,17 +93,11 @@ export const dataService = {
         ADMIN_ACCOUNTS
       );
     }
-    if (!localStorage.getItem(CHAT_KEY)) {
-      localStorage.setItem(CHAT_KEY, JSON.stringify([]));
-    }
-    if (!localStorage.getItem(APP_KEY)) {
-      localStorage.setItem(APP_KEY, JSON.stringify([]));
-    }
   },
 
   saveToDb(students: User[], counselors: User[], advisors: User[], admins: User[]) {
     localStorage.setItem(DB_KEY, JSON.stringify({ students, counselors, advisors, admins }));
-    window.dispatchEvent(new Event('storage'));
+    this._notifySync();
   },
 
   getDb() {
@@ -114,86 +113,53 @@ export const dataService = {
   saveAppointment(app: Appointment) {
     let apps = this.getAppointments();
     apps.unshift(app);
-    if (apps.length > 10) {
-      apps = apps.slice(0, 10);
-    }
     localStorage.setItem(APP_KEY, JSON.stringify(apps));
-    window.dispatchEvent(new Event('storage'));
+    this._notifySync();
   },
 
   updateAppointmentStatus(id: string, status: Appointment['status']) {
     const apps = this.getAppointments();
     const updated = apps.map(a => a.id === id ? { ...a, status } : a);
     localStorage.setItem(APP_KEY, JSON.stringify(updated));
-    window.dispatchEvent(new Event('storage'));
+    this._notifySync();
   },
 
   updateAppointmentLocation(id: string, location: string) {
     const apps = this.getAppointments();
-    const updated = apps.map(a => 
-      a.id === id ? { ...a, location, locationUpdated: true } : a
-    );
+    const updated = apps.map(a => a.id === id ? { ...a, location, locationUpdated: true } : a);
     localStorage.setItem(APP_KEY, JSON.stringify(updated));
-    window.dispatchEvent(new Event('storage'));
+    this._notifySync();
   },
 
   dismissLocationNotification(id: string) {
     const apps = this.getAppointments();
-    const updated = apps.map(a => 
-      a.id === id ? { ...a, locationUpdated: false } : a
-    );
+    const updated = apps.map(a => a.id === id ? { ...a, locationUpdated: false } : a);
     localStorage.setItem(APP_KEY, JSON.stringify(updated));
-    window.dispatchEvent(new Event('storage'));
+    this._notifySync();
   },
 
-  getMessages(user1Id: string, user2Id: string): Message[] {
-    const allMessages: Message[] = JSON.parse(localStorage.getItem(CHAT_KEY) || '[]');
-    return allMessages.filter(m => 
-      (m.senderId === user1Id && m.receiverId === user2Id) ||
-      (m.senderId === user2Id && m.receiverId === user1Id)
-    ).sort((a, b) => a.timestamp - b.timestamp);
-  },
-
-  saveMessage(msg: Message) {
-    const allMessages: Message[] = JSON.parse(localStorage.getItem(CHAT_KEY) || '[]');
-    allMessages.push(msg);
-    localStorage.setItem(CHAT_KEY, JSON.stringify(allMessages));
-    window.dispatchEvent(new Event('storage'));
-  },
-
-  getRecentChatContacts(currentUserId: string): string[] {
-    const allMessages: Message[] = JSON.parse(localStorage.getItem(CHAT_KEY) || '[]');
-    const contacts = new Set<string>();
-    for (let i = allMessages.length - 1; i >= 0; i--) {
-      const m = allMessages[i];
-      if (m.senderId === currentUserId) contacts.add(m.receiverId);
-      if (m.receiverId === currentUserId) contacts.add(m.senderId);
-    }
-    return Array.from(contacts);
+  updateUser(updatedUser: User): void {
+    const db = this.getDb();
+    db.students = db.students.map((u: any) => u.id === updatedUser.id ? { ...u, ...updatedUser } : u);
+    db.counselors = db.counselors.map((u: any) => u.id === updatedUser.id ? { ...u, ...updatedUser } : u);
+    db.advisors = db.advisors.map((u: any) => u.id === updatedUser.id ? { ...u, ...updatedUser } : u);
+    db.admins = db.admins.map((u: any) => u.id === updatedUser.id ? { ...u, ...updatedUser } : u);
+    this.saveToDb(db.students, db.counselors, db.advisors, db.admins);
   },
 
   importData(role: UserRole, content: string): number {
     const db = this.getDb();
     let count = 0;
-    if (role === UserRole.STUDENT) {
-      db.students = this.parseTxtToStudents(content);
-      count = db.students.length;
-    } else if (role === UserRole.COUNSELOR) {
-      db.counselors = this.parseTxtToCounselors(content);
-      count = db.counselors.length;
-    } else if (role === UserRole.ADVISOR) {
-      db.advisors = this.parseTxtToAdvisors(content);
-      count = db.advisors.length;
-    }
+    if (role === UserRole.STUDENT) { db.students = this.parseTxtToStudents(content); count = db.students.length; }
+    else if (role === UserRole.COUNSELOR) { db.counselors = this.parseTxtToCounselors(content); count = db.counselors.length; }
+    else if (role === UserRole.ADVISOR) { db.advisors = this.parseTxtToAdvisors(content); count = db.advisors.length; }
     this.saveToDb(db.students, db.counselors, db.advisors, db.admins);
     return count;
   },
 
   exportData(role: UserRole): string {
     const db = this.getDb();
-    if (role === UserRole.STUDENT) {
-      return db.students.map((s: any) => `${s.id},${s.name},${s.password},${s.college},${s.class},${s.phone},${s.gender},${s.healthTag || '健康'}`).join('\n');
-    }
+    if (role === UserRole.STUDENT) return db.students.map((s: any) => `${s.id},${s.name},${s.password},${s.college},${s.class},${s.phone},${s.gender},${s.healthTag || '健康'}`).join('\n');
     if (role === UserRole.COUNSELOR) return db.counselors.map((c: any) => `${c.id},${c.name},${c.password},${c.specialization},${c.phone},${c.gender}`).join('\n');
     if (role === UserRole.ADVISOR) return db.advisors.map((a: any) => `${a.id},${a.name},${a.password},${a.college},${a.phone},${a.gender}`).join('\n');
     return '';
@@ -210,24 +176,11 @@ export const dataService = {
 
   addUser(user: User): { success: boolean, error?: string } {
     const db = this.getDb();
-    const allUsers = [...db.students, ...db.counselors, ...db.advisors, ...db.admins];
-    if (allUsers.some((u: User) => u.id === user.id)) {
-      return { success: false, error: 'ID已存在' };
-    }
     if (user.role === UserRole.STUDENT) db.students.push(user);
     else if (user.role === UserRole.COUNSELOR) db.counselors.push(user);
     else if (user.role === UserRole.ADVISOR) db.advisors.push(user);
     this.saveToDb(db.students, db.counselors, db.advisors, db.admins);
     return { success: true };
-  },
-
-  updateUser(updatedUser: User): void {
-    const db = this.getDb();
-    if (updatedUser.role === UserRole.STUDENT) db.students = db.students.map((u: any) => u.id === updatedUser.id ? updatedUser : u);
-    else if (updatedUser.role === UserRole.COUNSELOR) db.counselors = db.counselors.map((u: any) => u.id === updatedUser.id ? updatedUser : u);
-    else if (updatedUser.role === UserRole.ADVISOR) db.advisors = db.advisors.map((u: any) => u.id === updatedUser.id ? updatedUser : u);
-    else if (updatedUser.role === UserRole.ADMIN) db.admins = db.admins.map((u: any) => u.id === updatedUser.id ? updatedUser : u);
-    this.saveToDb(db.students, db.counselors, db.advisors, db.admins);
   },
 
   verifyLogin(id: string, password: string, role: UserRole): { success: boolean; error?: string; user?: User } {
@@ -237,10 +190,60 @@ export const dataService = {
     else if (role === UserRole.COUNSELOR) list = db.counselors;
     else if (role === UserRole.ADVISOR) list = db.advisors;
     else if (role === UserRole.ADMIN) list = db.admins;
-    
     const user = list.find((u: User) => u.id === id);
     if (!user) return { success: false, error: '账号不存在' };
     if (user.password !== password) return { success: false, error: '密码错误' };
     return { success: true, user };
+  },
+
+  getMessages(user1Id: string, user2Id: string): Message[] {
+    const allMessages: Message[] = JSON.parse(localStorage.getItem(CHAT_KEY) || '[]');
+    return allMessages.filter(m => 
+      (m.senderId === user1Id && m.receiverId === user2Id) ||
+      (m.senderId === user2Id && m.receiverId === user1Id)
+    ).sort((a, b) => a.timestamp - b.timestamp);
+  },
+
+  saveMessage(msg: Message) {
+    const allMessages: Message[] = JSON.parse(localStorage.getItem(CHAT_KEY) || '[]');
+    allMessages.push(msg);
+    
+    // 自动清理：仅保留最近 7 天的消息
+    const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const filteredMessages = allMessages.filter(m => m.timestamp > oneWeekAgo);
+    
+    localStorage.setItem(CHAT_KEY, JSON.stringify(filteredMessages));
+    this._notifySync();
+  },
+
+  markMessagesAsRead(currentUserId: string, contactId: string) {
+    const markers = JSON.parse(localStorage.getItem(READ_MARK_KEY) || '{}');
+    const key = `${currentUserId}_${contactId}`;
+    markers[key] = Date.now();
+    localStorage.setItem(READ_MARK_KEY, JSON.stringify(markers));
+    this._notifySync();
+  },
+
+  hasUnreadMessages(currentUserId: string, contactId: string): boolean {
+    const messages = this.getMessages(currentUserId, contactId);
+    if (messages.length === 0) return false;
+
+    const markers = JSON.parse(localStorage.getItem(READ_MARK_KEY) || '{}');
+    const key = `${currentUserId}_${contactId}`;
+    const lastRead = markers[key] || 0;
+
+    // 检查是否有来自对方且晚于最后阅读时间的的消息
+    return messages.some(m => m.senderId === contactId && m.timestamp > lastRead);
+  },
+
+  getRecentChatContacts(currentUserId: string): string[] {
+    const allMessages: Message[] = JSON.parse(localStorage.getItem(CHAT_KEY) || '[]');
+    const contacts = new Set<string>();
+    for (let i = allMessages.length - 1; i >= 0; i--) {
+      const m = allMessages[i];
+      if (m.senderId === currentUserId) contacts.add(m.receiverId);
+      if (m.receiverId === currentUserId) contacts.add(m.senderId);
+    }
+    return Array.from(contacts);
   }
 };
