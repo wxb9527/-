@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { User, UserRole, Appointment, HealthTag } from './types';
+import { User, UserRole, Appointment, HealthTag, Mood } from './types';
 import Layout from './components/Layout';
 import StudentView from './views/StudentView';
 import CounselorView from './views/CounselorView';
@@ -45,7 +46,6 @@ const App: React.FC = () => {
       }
     }
 
-    // 增强消息推送逻辑：不论是谁发给当前用户的，都要提醒
     if (user) {
       const allMsgs = JSON.parse(localStorage.getItem('unimind_chat_history') || '[]');
       if (allMsgs.length > 0) {
@@ -115,6 +115,19 @@ const App: React.FC = () => {
     }
   };
 
+  const handleMoodLogged = (mood: Mood) => {
+    if (user) {
+      dataService.saveMoodRecord({
+        id: Date.now().toString(),
+        studentId: user.id,
+        mood: mood,
+        timestamp: Date.now()
+      });
+      setNotification({ text: '心情已记录，管理老师已收到反馈' });
+      refreshGlobalData();
+    }
+  };
+
   const handleUpdateAppointmentStatus = (id: string, status: Appointment['status']) => {
     dataService.updateAppointmentStatus(id, status);
     setNotification({ text: '预约状态已更新' });
@@ -123,40 +136,80 @@ const App: React.FC = () => {
 
   if (!isAuthenticated || !user) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-xl p-8 max-w-md w-full animate-fade-in border border-slate-100">
-            <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg mx-auto mb-6">
-              <i className="fas fa-heart-pulse text-3xl"></i>
+      <div className="min-h-screen relative flex items-center justify-center p-4 overflow-hidden bg-[#fff5f7]">
+        {/* 背景图层：樱花风景 */}
+        <div 
+          className="absolute inset-0 z-0 bg-cover bg-center animate-subtle-zoom"
+          style={{ 
+            backgroundImage: 'url("https://images.unsplash.com/photo-1522383225653-ed111181a951?auto=format&fit=crop&q=80&w=2000")',
+            filter: 'saturate(1.1)'
+          }}
+        ></div>
+        
+        {/* 樱粉色渐变遮罩 */}
+        <div className="absolute inset-0 z-1 bg-gradient-to-br from-rose-100/30 via-transparent to-pink-200/20"></div>
+
+        {/* 登录卡片 */}
+        <div className="relative z-10 bg-white/20 backdrop-blur-3xl rounded-[50px] shadow-[0_40px_100px_rgba(255,182,193,0.3)] p-12 max-w-md w-full animate-bounce-in border border-white/50">
+            <div className="w-20 h-20 bg-gradient-to-br from-rose-400 to-pink-500 rounded-3xl flex items-center justify-center text-white shadow-xl mx-auto mb-8 transform hover:rotate-6 transition-transform">
+              <i className="fas fa-heart-pulse text-4xl"></i>
             </div>
-            <h1 className="text-2xl font-bold mb-1 text-slate-900">UniMind</h1>
-            <p className="text-slate-400 text-sm mb-8">高校心理健康智慧服务平台</p>
             
-            <form onSubmit={handleLoginSubmit} className="space-y-4 text-left">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase px-1">身份角色</label>
-                  <select id="login-role" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm appearance-none">
-                      <option value={UserRole.STUDENT}>学生</option>
-                      <option value={UserRole.COUNSELOR}>咨询师</option>
-                      <option value={UserRole.ADVISOR}>辅导员</option>
-                      <option value={UserRole.ADMIN}>管理员</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase px-1">账号/学号</label>
-                  <input id="login-id" type="text" placeholder="请输入账号" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm" required />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase px-1">登录密码</label>
+            <div className="text-center mb-10">
+              <h1 className="text-3xl font-black text-rose-900 tracking-tighter mb-1">UniMind</h1>
+              <div className="h-1 w-10 bg-rose-400 mx-auto rounded-full mb-3"></div>
+              <p className="text-rose-700 text-xs font-bold tracking-widest uppercase opacity-80">心如樱花 · 温暖而生</p>
+            </div>
+            
+            <form onSubmit={handleLoginSubmit} className="space-y-5 text-left">
+                <div className="group">
+                  <label className="block text-[10px] font-black text-rose-800/60 mb-1.5 uppercase px-2 tracking-widest group-focus-within:text-rose-600">身份角色</label>
                   <div className="relative">
-                    <input id="login-password" type={showLoginPwd ? "text" : "password"} placeholder="请输入密码" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-sm pr-12" required />
-                    <button type="button" onClick={() => setShowLoginPwd(!showLoginPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-indigo-600">
+                    <select id="login-role" className="w-full p-4 bg-white/40 border-2 border-transparent rounded-2xl outline-none focus:border-rose-300 focus:bg-white/60 text-sm appearance-none cursor-pointer transition-all font-bold text-rose-900 shadow-sm">
+                        <option value={UserRole.STUDENT}>👨‍🎓 同学</option>
+                        <option value={UserRole.COUNSELOR}>👩‍🏫 咨询老师</option>
+                        <option value={UserRole.ADVISOR}>📋 辅导员</option>
+                        <option value={UserRole.ADMIN}>⚙️ 管理员</option>
+                    </select>
+                    <i className="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-rose-400 pointer-events-none text-xs"></i>
+                  </div>
+                </div>
+                
+                <div className="group">
+                  <label className="block text-[10px] font-black text-rose-800/60 mb-1.5 uppercase px-2 tracking-widest group-focus-within:text-rose-600">账号/学号</label>
+                  <div className="relative">
+                    <i className="fas fa-id-card absolute left-4 top-1/2 -translate-y-1/2 text-rose-300 group-focus-within:text-rose-500 transition-colors"></i>
+                    <input id="login-id" type="text" placeholder="输入您的唯一标识" className="w-full p-4 pl-12 bg-white/40 border-2 border-transparent rounded-2xl outline-none focus:border-rose-300 focus:bg-white/60 text-sm transition-all font-bold placeholder:text-rose-200 text-rose-900 shadow-sm" required />
+                  </div>
+                </div>
+                
+                <div className="group">
+                  <label className="block text-[10px] font-black text-rose-800/60 mb-1.5 uppercase px-2 tracking-widest group-focus-within:text-rose-600">登录密码</label>
+                  <div className="relative">
+                    <i className="fas fa-key absolute left-4 top-1/2 -translate-y-1/2 text-rose-300 group-focus-within:text-rose-500 transition-colors"></i>
+                    <input id="login-password" type={showLoginPwd ? "text" : "password"} placeholder="输入您的安全密码" className="w-full p-4 pl-12 bg-white/40 border-2 border-transparent rounded-2xl outline-none focus:border-rose-300 focus:bg-white/60 text-sm pr-12 transition-all font-bold placeholder:text-rose-200 text-rose-900 shadow-sm" required />
+                    <button type="button" onClick={() => setShowLoginPwd(!showLoginPwd)} className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-rose-400 hover:text-rose-600 transition-colors">
                       <i className={`fas ${showLoginPwd ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                     </button>
                   </div>
                 </div>
-                <button type="submit" className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg mt-4">进入系统</button>
+                
+                <button type="submit" className="w-full bg-gradient-to-r from-rose-500 to-pink-600 text-white py-4 rounded-2xl font-black text-sm hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_20px_40px_rgba(244,63,94,0.3)] mt-4">
+                  立即开启心灵之旅
+                </button>
             </form>
-            {notification && <p className="mt-4 text-red-500 text-xs font-bold animate-pulse">{notification.text}</p>}
+            
+            {notification && (
+              <div className="mt-6 flex items-center justify-center gap-2 text-rose-600 text-xs font-black animate-shake">
+                <i className="fas fa-circle-exclamation"></i>
+                {notification.text}
+              </div>
+            )}
+        </div>
+        
+        {/* 页脚装饰 */}
+        <div className="absolute bottom-10 z-1 text-rose-900/40 text-[10px] font-bold tracking-[0.2em] uppercase">
+          University Mental Health Platform · Sakura Edition
         </div>
       </div>
     );
@@ -171,7 +224,7 @@ const App: React.FC = () => {
             counselors={dbData.counselors}
             advisors={dbData.advisors}
             appointments={appointments}
-            onMoodLogged={() => setNotification({ text: '心情已记录' })}
+            onMoodLogged={handleMoodLogged}
             onStartChat={(t) => setActiveChat({ target: t === 'AI' ? { id: 'AI', name: 'AI 心理助手', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=AI' } : t, isAI: t === 'AI' })}
             onBookAppointment={(c, t, l) => {
                const newApp: Appointment = { id: Date.now().toString(), studentId: user.id, studentName: user.name, studentAvatar: user.avatar, counselorId: c.id, counselorName: c.name, dateTime: t, location: l, status: 'PENDING', timestamp: Date.now() };
@@ -229,7 +282,6 @@ const App: React.FC = () => {
         <div 
           onClick={() => { 
             if(notification.sender) {
-              // 点击通知时立即标记为已读
               dataService.markMessagesAsRead(user.id, notification.sender.id);
               setActiveChat({ target: notification.sender, isAI: false }); 
             }

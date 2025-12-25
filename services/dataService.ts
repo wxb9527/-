@@ -1,5 +1,5 @@
 
-import { User, UserRole, HealthTag, Message, Appointment } from '../types';
+import { User, UserRole, HealthTag, Message, Appointment, MoodRecord } from '../types';
 
 const ADMIN_ACCOUNTS: User[] = [
   { id: 'admin01', name: '系统管理员', password: 'admin_password_123', role: UserRole.ADMIN, avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=admin1', gender: '男' }
@@ -25,6 +25,7 @@ const DB_KEY = 'unimind_mock_db';
 const CHAT_KEY = 'unimind_chat_history';
 const APP_KEY = 'unimind_appointments';
 const READ_MARK_KEY = 'unimind_read_markers';
+const MOOD_KEY = 'unimind_mood_history';
 
 export const dataService = {
   _notifySync() {
@@ -145,6 +146,20 @@ export const dataService = {
     db.advisors = db.advisors.map((u: any) => u.id === updatedUser.id ? { ...u, ...updatedUser } : u);
     db.admins = db.admins.map((u: any) => u.id === updatedUser.id ? { ...u, ...updatedUser } : u);
     this.saveToDb(db.students, db.counselors, db.advisors, db.admins);
+  },
+
+  // 心情记录功能
+  saveMoodRecord(record: MoodRecord) {
+    const records: MoodRecord[] = JSON.parse(localStorage.getItem(MOOD_KEY) || '[]');
+    records.unshift(record);
+    // 仅保留每个学生最新的10条或总计1000条
+    localStorage.setItem(MOOD_KEY, JSON.stringify(records.slice(0, 1000)));
+    this._notifySync();
+  },
+
+  getLatestMood(studentId: string): MoodRecord | null {
+    const records: MoodRecord[] = JSON.parse(localStorage.getItem(MOOD_KEY) || '[]');
+    return records.find(r => r.studentId === studentId) || null;
   },
 
   importData(role: UserRole, content: string): number {

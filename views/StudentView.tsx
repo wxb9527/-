@@ -414,18 +414,21 @@ const StudentView: React.FC<StudentViewProps> = ({
             <div className="absolute top-0 left-0 w-full h-1.5 bg-red-600"></div>
             <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce"><i className="fas fa-exclamation-triangle text-2xl"></i></div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">紧急救助中心</h2>
-            <p className="text-sm text-gray-500 mb-8 px-4">如果您正感到绝望或想伤害自己，请立即联系我们。</p>
+            <p className="text-sm text-gray-500 mb-8 px-4 font-bold text-red-600">系统已锁定：此类突发状况将由您的直属辅导员第一时间接听并处理。</p>
             <div className="space-y-3">
-              {[assignedAdvisor, ...counselors.slice(0, 1)].filter(Boolean).map(person => (
-                <button key={person!.id} onClick={() => setConfirmCall({ name: person!.name, phone: person!.phone! })} className="w-full flex items-center justify-between p-4 bg-red-50 rounded-xl hover:bg-red-100 transition-colors border border-red-100 group">
+              {[assignedAdvisor].filter(Boolean).map(person => (
+                <button key={person!.id} onClick={() => setConfirmCall({ name: person!.name, phone: person!.phone! })} className="w-full flex items-center justify-between p-4 bg-red-50 rounded-2xl hover:bg-red-100 transition-colors border border-red-100 group">
                   <div className="flex items-center gap-3 text-left">
                     <img src={person!.avatar} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" alt="" />
-                    <div className="text-left"><p className="font-bold text-red-900 text-sm">{person!.name}</p></div>
+                    <div className="text-left">
+                       <p className="font-bold text-red-900 text-sm">{person!.name}</p>
+                       <p className="text-[10px] text-red-400">所属学院辅导员</p>
+                    </div>
                   </div>
                   <div className="bg-red-600 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg"><i className="fas fa-phone-alt text-xs"></i></div>
                 </button>
               ))}
-              <button onClick={() => setShowEmergency(false)} className="w-full py-2 text-gray-400 text-sm font-bold mt-4 hover:text-gray-600">关闭</button>
+              <button onClick={() => setShowEmergency(false)} className="w-full py-2 text-gray-400 text-sm font-bold mt-4 hover:text-gray-600">关闭窗口</button>
             </div>
           </div>
         </div>

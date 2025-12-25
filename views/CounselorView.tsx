@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { User, Appointment, HealthTag, Message } from '../types';
 import UserInfoModal from '../components/UserInfoModal';
 import { dataService } from '../services/dataService';
+import { MOOD_CONFIG } from '../constants';
 
 interface CounselorViewProps {
   user: User;
@@ -121,25 +122,34 @@ const CounselorView: React.FC<CounselorViewProps> = ({
                 </h3>
              </div>
              <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {recentStudents.map(s => (
-                   <button 
-                     key={s.id} 
-                     onClick={() => handleSelectStudent(s)}
-                     className={`flex items-center gap-4 p-4 rounded-2xl border transition-all text-left ${hasUnread(s.id) ? 'bg-white border-indigo-400 ring-4 ring-indigo-50 scale-105 shadow-md' : 'bg-gray-50 border-transparent hover:border-gray-100'}`}
-                   >
-                     <div className="relative">
-                        <img src={s.avatar} className="w-12 h-12 rounded-full border-2 border-white shadow-sm" alt="" />
-                        {hasUnread(s.id) && <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white flex items-center justify-center"><i className="fas fa-exclamation text-[8px] text-white"></i></div>}
-                     </div>
-                     <div className="flex-1 min-w-0">
-                        <p className="font-bold text-gray-900 truncate">{s.name}</p>
-                        <p className="text-[10px] text-gray-400 truncate">{s.college}</p>
-                     </div>
-                     <div className={`w-8 h-8 rounded-full flex items-center justify-center ${hasUnread(s.id) ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-indigo-600 border border-gray-100 shadow-sm'}`}>
-                        <i className={`fas ${hasUnread(s.id) ? 'fa-bell' : 'fa-chevron-right'}`}></i>
-                     </div>
-                   </button>
-                ))}
+                {recentStudents.map(s => {
+                   const latestMood = dataService.getLatestMood(s.id);
+                   const moodCfg = latestMood ? MOOD_CONFIG[latestMood.mood] : null;
+                   return (
+                      <button 
+                        key={s.id} 
+                        onClick={() => handleSelectStudent(s)}
+                        className={`flex items-center gap-4 p-4 rounded-2xl border transition-all text-left ${hasUnread(s.id) ? 'bg-white border-indigo-400 ring-4 ring-indigo-50 scale-105 shadow-md' : 'bg-gray-50 border-transparent hover:border-gray-100'}`}
+                      >
+                        <div className="relative">
+                           <img src={s.avatar} className="w-12 h-12 rounded-full border-2 border-white shadow-sm" alt="" />
+                           {hasUnread(s.id) && <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white flex items-center justify-center"><i className="fas fa-exclamation text-[8px] text-white"></i></div>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                           <p className="font-bold text-gray-900 truncate">{s.name}</p>
+                           {moodCfg && (
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <i className={`fas ${moodCfg.icon} text-[10px] ${moodCfg.color}`}></i>
+                                <span className={`text-[9px] font-bold ${moodCfg.color}`}>最新心情：{moodCfg.label}</span>
+                              </div>
+                           )}
+                        </div>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${hasUnread(s.id) ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-indigo-600 border border-gray-100 shadow-sm'}`}>
+                           <i className={`fas ${hasUnread(s.id) ? 'fa-bell' : 'fa-chevron-right'}`}></i>
+                        </div>
+                      </button>
+                   );
+                })}
                 {recentStudents.length === 0 && <p className="col-span-full py-10 text-center text-gray-400 text-xs italic">当前暂无活跃对话</p>}
              </div>
           </div>
@@ -155,6 +165,9 @@ const CounselorView: React.FC<CounselorViewProps> = ({
               {monitoredStudents.map((student) => {
                 const isUnhealthy = student.healthTag === '不健康';
                 const msgAlert = hasUnread(student.id);
+                const latestMood = dataService.getLatestMood(student.id);
+                const moodCfg = latestMood ? MOOD_CONFIG[latestMood.mood] : null;
+
                 return (
                   <div key={student.id} className={`p-4 flex items-center gap-4 hover:bg-gray-50 transition-all ${isUnhealthy ? 'bg-red-50/40' : ''}`}>
                     <div className="relative">
@@ -162,13 +175,21 @@ const CounselorView: React.FC<CounselorViewProps> = ({
                       {msgAlert && <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-bounce"></div>}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-gray-900 truncate">{student.name}</p>
-                      <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold text-white ${isUnhealthy ? 'bg-red-600' : student.healthTag === '亚健康' ? 'bg-yellow-500' : 'bg-green-500'}`}>
-                        {student.healthTag || '健康'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-gray-900 truncate">{student.name}</p>
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold text-white ${isUnhealthy ? 'bg-red-600' : student.healthTag === '亚健康' ? 'bg-yellow-500' : 'bg-green-500'}`}>
+                          {student.healthTag || '健康'}
+                        </span>
+                      </div>
+                      {moodCfg && (
+                        <div className="flex items-center gap-1.5 mt-1 bg-white/50 w-fit px-2 py-0.5 rounded-lg border border-gray-100 shadow-sm">
+                           <i className={`fas ${moodCfg.icon} text-xs ${moodCfg.color}`}></i>
+                           <span className={`text-[10px] font-bold ${moodCfg.color}`}>情绪：{moodCfg.label}</span>
+                        </div>
+                      )}
                     </div>
                     <button onClick={() => handleSelectStudent(student)} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${msgAlert ? 'bg-red-500 text-white animate-pulse shadow-lg' : 'bg-indigo-600 text-white'}`}>
-                      {msgAlert ? '收到新消息' : '沟通'}
+                      {msgAlert ? '收到新消息' : '开启沟通'}
                     </button>
                   </div>
                 );
